@@ -26,7 +26,7 @@ class Sort:
     the database.
     """
 
-    def order_clause(self) -> str | None:
+    def clause(self) -> str | None:
         """Generates a SQL fragment to be used in a ORDER BY clause, or
         None if no fragment is used (i.e., this is a slow sort).
         """
@@ -55,13 +55,13 @@ class Sort:
 class MultipleSort(Sort):
     """Sort that encapsulates multiple sub-sorts."""
 
-    def __init__(self, sorts: list[Sort] | None = None):
+    def __init__(self, sorts: list[FieldSort] | None = None):
         self.sorts = sorts or []
 
-    def add_sort(self, sort: Sort):
+    def add_sort(self, sort: FieldSort):
         self.sorts.append(sort)
 
-    def order_clause(self) -> str:
+    def clause(self) -> str:
         """Return the list SQL clauses for those sub-sorts for which we can be
         (at least partially) fast.
 
@@ -71,7 +71,7 @@ class MultipleSort(Sort):
         """
         order_strings = []
         for sort in reversed(self.sorts):
-            clause = sort.order_clause()
+            clause = sort.clause()
             if clause is None:
                 break
             order_strings.append(clause)
@@ -91,7 +91,7 @@ class MultipleSort(Sort):
         for sort in reversed(self.sorts):
             if switch_slow:
                 slow_sorts.append(sort)
-            elif sort.order_clause() is None:
+            elif sort.clause() is None:
                 switch_slow = True
                 slow_sorts.append(sort)
             else:
@@ -163,7 +163,7 @@ class FieldSort(Sort):
 class FixedFieldSort(FieldSort):
     """Sort object to sort on a fixed field."""
 
-    def order_clause(self) -> str:
+    def clause(self) -> str:
         order = "ASC" if self.ascending else "DESC"
         if self.case_insensitive:
             field = (
@@ -210,7 +210,7 @@ class SmartArtistSort(FieldSort):
     prioritizing the sort field over the raw field.
     """
 
-    def order_clause(self):
+    def clause(self):
         order = "ASC" if self.ascending else "DESC"
         collate = "COLLATE NOCASE" if self.case_insensitive else ""
         field = self.field

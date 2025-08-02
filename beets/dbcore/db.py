@@ -1438,7 +1438,7 @@ class Database:
         query = query or TrueQuery()  # A null query.
         sort = sort or NullSort()  # Unsorted.
         where, subvals = query.clause()
-        order_by = sort.order_clause()
+        order_by = sort.clause()
 
         table = model_cls._table
         _from = table
