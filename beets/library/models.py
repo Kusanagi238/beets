@@ -36,7 +36,7 @@ from .queries import PF_KEY_DEFAULT
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from beets.dbcore.query import FieldQuery, FieldQueryType
+    from beets.dbcore.query import FieldQuery, QueryByField
     from beets.dbcore.sort import FieldSort, Sort
 
     from .library import Library  # noqa: F401
@@ -67,7 +67,7 @@ class LibModel(dbcore.Model["Library"]):
         }
 
     @cached_classproperty
-    def _queries(cls) -> dict[str, FieldQueryType]:
+    def _queries(cls) -> QueryByField:
         return plugins.named_queries(cls)  # type: ignore[arg-type]
 
     @cached_classproperty
@@ -128,7 +128,7 @@ class LibModel(dbcore.Model["Library"]):
 
     @classmethod
     def field_query(
-        cls, field: str, pattern: str, query_cls: FieldQueryType
+        cls, field: str, pattern: str, query_cls: type[FieldQuery]
     ) -> FieldQuery:
         """Get a `FieldQuery` for the given field on this model."""
         field = maybe_replace_legacy_field(field, cls is Album)
@@ -718,7 +718,7 @@ class Item(LibModel):
     _sorts: ClassVar[dict[str, type[FieldSort]]] = {"artist": SmartArtistSort}
 
     @cached_classproperty
-    def _queries(cls) -> dict[str, FieldQueryType]:
+    def _queries(cls) -> QueryByField:
         return {**super()._queries, "singleton": dbcore.query.SingletonQuery}
 
     _format_config_key = "format_item"
