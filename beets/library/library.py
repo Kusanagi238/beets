@@ -7,18 +7,18 @@ import platformdirs
 
 import beets
 from beets import context, dbcore
-from beets.dbcore.sort import NullSort
+from beets.dbcore.query import Query
 from beets.util import normpath
 
 from . import migrations
 from .models import Album, Item
-from .queries import PF_KEY_DEFAULT, parse_query_parts, parse_query_string
+from .queries import PF_KEY_DEFAULT
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from beets.dbcore import Results
-    from beets.dbcore.query import Query, Sort
+    from beets.dbcore.sort import Sort
 
     from .models import LibModel
 
@@ -124,16 +124,16 @@ class Library(dbcore.Database):
             # Query parsing needs the library root, but keeping it scoped here
             # avoids leaking one Library's directory into another's work.
             with context.music_dir(self.directory):
-                if isinstance(query, str):
-                    query, parsed_sort = parse_query_string(query, model_cls)
-                elif isinstance(query, (list, tuple)):
-                    query, parsed_sort = parse_query_parts(query, model_cls)
+                if isinstance(query, Query):
+                    parsed_query, parsed_sort = query, sort
+                else:
+                    parsed_query, parsed_sort = model_cls.parse_query(query)
         except dbcore.query.InvalidQueryArgumentValueError as exc:
             raise dbcore.InvalidQueryError(query, exc)
 
         return self.get_results(
             model_cls,
-            query,
+            parsed_query,
             # Any non-null sort specified by the parsed query overrides the
             # provided sort.
             parsed_sort or sort or model_cls.default_sort,

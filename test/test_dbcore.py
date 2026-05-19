@@ -830,3 +830,9 @@ class TestException:
         with pytest.raises(DBCustomFunctionError):
             with db.transaction() as tx:
                 tx.query("select * from test where plz_raise()")
+
+
+class ParseQueryTest(unittest.TestCase):
+    def test_parse_invalid_query_string(self):
+        with pytest.raises(dbcore.query.ParsingError):
+            dbcore.queryparse.ModelQuery.parse(ModelFixture1, 'foo"')
