@@ -25,6 +25,7 @@ from beets.dbcore.sort import FixedFieldSort, MultipleSort, SlowFieldSort
 from beets.library import Album
 from beets.test import _common
 from beets.test.helper import BeetsTestCase
+from beets.util import cached_classproperty
 
 
 def abs_test_path(path: str) -> str:
@@ -366,6 +367,11 @@ class SortCombinedFieldTest(DummyDataTestCase):
 
 
 class ConfigSortTest(DummyDataTestCase):
+    def setUp(self):
+        super().setUp()
+        self.config["sort_case_insensitive"] = True
+        cached_classproperty.cache.clear()
+
     def test_default_sort_item(self):
         results = list(self.lib.items())
         assert results[0].artist < results[1].artist
@@ -418,56 +424,58 @@ class CaseSensitivityTest(DummyDataTestCase):
 
         self.new_album = album
         self.new_item = item
+        cached_classproperty.cache.clear()
 
     def tearDown(self):
         self.new_item.remove(delete=True)
         self.new_album.remove(delete=True)
         super().tearDown()
+        cached_classproperty.cache.clear()
 
     def test_smart_artist_case_insensitive(self):
-        config["sort_case_insensitive"] = True
+        self.config["sort_case_insensitive"] = True
         q = "artist+"
         results = list(self.lib.items(q))
         assert results[0].artist == "lowercase"
         assert results[1].artist == "One"
 
     def test_smart_artist_case_sensitive(self):
-        config["sort_case_insensitive"] = False
+        self.config["sort_case_insensitive"] = False
         q = "artist+"
         results = list(self.lib.items(q))
         assert results[0].artist == "One"
         assert results[-1].artist == "lowercase"
 
     def test_fixed_field_case_insensitive(self):
-        config["sort_case_insensitive"] = True
+        self.config["sort_case_insensitive"] = True
         q = "album+"
         results = list(self.lib.albums(q))
         assert results[0].album == "album"
         assert results[1].album == "Album A"
 
     def test_fixed_field_case_sensitive(self):
-        config["sort_case_insensitive"] = False
+        self.config["sort_case_insensitive"] = False
         q = "album+"
         results = list(self.lib.albums(q))
         assert results[0].album == "Album A"
         assert results[-1].album == "album"
 
     def test_flex_field_case_insensitive(self):
-        config["sort_case_insensitive"] = True
+        self.config["sort_case_insensitive"] = True
         q = "flex1+"
         results = list(self.lib.items(q))
         assert results[0].flex1 == "flex1"
         assert results[1].flex1 == "Flex1-0"
 
     def test_flex_field_case_sensitive(self):
-        config["sort_case_insensitive"] = False
+        self.config["sort_case_insensitive"] = False
         q = "flex1+"
         results = list(self.lib.items(q))
         assert results[0].flex1 == "Flex1-0"
         assert results[-1].flex1 == "flex1"
 
     def test_case_sensitive_only_affects_text(self):
-        config["sort_case_insensitive"] = True
+        self.config["sort_case_insensitive"] = True
         q = "track+"
         results = list(self.lib.items(q))
         # If the numerical values were sorted as strings,
