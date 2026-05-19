@@ -62,6 +62,7 @@ class ModelFixture1(LibModel):
         "id": dbcore.types.PRIMARY_ID,
         "field_one": dbcore.types.INTEGER,
         "field_two": dbcore.types.STRING,
+        "path": dbcore.types.PathType(),
     }
 
     _sorts: ClassVar[dict[str, type[sort.FieldSort]]] = {
@@ -75,7 +76,7 @@ class ModelFixture1(LibModel):
 
     @cached_classproperty
     def _queries(cls):
-        return {"some_query": QueryFixture}
+        return {"some_query": QueryFixture, "year": dbcore.query.NumericQuery}
 
     @classmethod
     def _getters(cls):
@@ -217,7 +218,7 @@ class MigrationTest(unittest.TestCase):
         c.execute("select * from test")
         row = c.fetchone()
         c.connection.close()
-        assert len(row.keys()) == len(ModelFixture2._fields)
+        assert len(row.keys()) == len(ModelFixture1._fields)
 
     def test_open_with_multiple_new_fields(self):
         new_lib = DatabaseFixture4(self.libfile)
@@ -423,9 +424,12 @@ class ModelTest(unittest.TestCase):
     def test_items(self):
         model = ModelFixture1(self.db)
         model.id = 5
-        assert {("id", 5), ("field_one", 0), ("field_two", "")} == set(
-            model.items()
-        )
+        assert {
+            ("id", 5),
+            ("field_one", 0),
+            ("field_two", ""),
+            ("path", b""),
+        } == set(model.items())
 
     def test_delete_internal_field(self):
         model = dbcore.Model()
@@ -562,9 +566,8 @@ class TestModelTypeFallback:
 
 class QueryParseTest(unittest.TestCase):
     def pqp(self, part):
-        return dbcore.queryparse.parse_query_part(
-            part, {"year": query.NumericQuery}
-        )[:-1]  # remove the negate flag
+        term = dbcore.queryparse.QueryTerm.make(part)
+        return term.field, term.pattern, term.get_query_cls(ModelFixture1)
 
     def test_one_basic_term(self):
         q = "test"
@@ -614,6 +617,11 @@ class QueryParseTest(unittest.TestCase):
     def test_empty_query_part(self):
         q = ""
         r = (None, "", query.SubstringQuery)
+        assert self.pqp(q) == r
+
+    def test_implicit_path(self):
+        q = "/tmp"
+        r = ("path", "/tmp", dbcore.query.PathQuery)
         assert self.pqp(q) == r
 
 
