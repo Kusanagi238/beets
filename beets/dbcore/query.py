@@ -115,6 +115,9 @@ class Query(ABC):
     def __and__(self, other: Query) -> AndQuery:
         return AndQuery([self, other])
 
+    def __or__(self, other: Query) -> OrQuery:
+        return OrQuery([self, other])
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
 
@@ -647,6 +650,14 @@ class MutableCollectionQuery(CollectionQuery):
 class AndQuery(MutableCollectionQuery):
     """A conjunction of a list of other queries."""
 
+    def __and__(self, other: Query) -> AndQuery:
+        if isinstance(other, AndQuery):
+            self.subqueries.extend(other.subqueries)
+        else:
+            self.subqueries.append(other)
+
+        return self
+
     def clause(self) -> tuple[str | None, Sequence[SQLiteType]]:
         return self.clause_with_joiner("and")
 
@@ -656,6 +667,14 @@ class AndQuery(MutableCollectionQuery):
 
 class OrQuery(MutableCollectionQuery):
     """A conjunction of a list of other queries."""
+
+    def __or__(self, other: Query) -> OrQuery:
+        if isinstance(other, OrQuery):
+            self.subqueries.extend(other.subqueries)
+        else:
+            self.subqueries.append(other)
+
+        return self
 
     def clause(self) -> tuple[str | None, Sequence[SQLiteType]]:
         return self.clause_with_joiner("or")

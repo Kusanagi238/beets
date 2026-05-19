@@ -69,6 +69,7 @@ class ModelFixture1(LibModel):
         "some_sort": SortFixture
     }
     _indices = (Index("field_one_index", ("field_one",)),)
+    _search_fields = ("artist", "title")
 
     @cached_classproperty
     def _types(cls):
