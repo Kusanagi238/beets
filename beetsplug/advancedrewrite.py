@@ -15,12 +15,10 @@
 """Plugin to rewrite fields based on a given query."""
 
 import re
-import shlex
 from collections import defaultdict
 
 import confuse
 
-from beets.dbcore import AndQuery, query_from_strings
 from beets.dbcore.types import MULTI_VALUE_DSV
 from beets.library import Album, Item
 from beets.plugins import BeetsPlugin
@@ -131,9 +129,7 @@ class AdvancedRewritePlugin(BeetsPlugin):
                     raise UserError(
                         "Advanced rewrites must have at least one replacement"
                     )
-                query = query_from_strings(
-                    AndQuery, Item, query_parts=shlex.split(match)
-                )
+                query = Item.parse_query(match).query
                 for fieldname, replacement in replacements.items():
                     if fieldname not in Item._fields:
                         raise UserError(

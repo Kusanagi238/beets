@@ -21,6 +21,7 @@ import re
 import shlex
 from dataclasses import dataclass
 from functools import partial, reduce
+from itertools import groupby
 from typing import TYPE_CHECKING, NamedTuple
 
 from typing_extensions import Self
@@ -31,9 +32,12 @@ from beets.util import cached_classproperty
 from . import query, sort
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Sequence
+    from collections.abc import Iterable, Sequence
 
     from beets.library.models import LibModel
+
+    from .query import Query
+    from .sort import Sort
 
 
 log = logging.getLogger(__name__)
@@ -141,24 +145,6 @@ class QueryTerm:
         return query.NotQuery(out_query) if self.negate else out_query
 
 
-# TYPING ERROR
-def query_from_strings(
-    query_cls: type[query.CollectionQuery],
-    model_cls: type[LibModel],
-    query_parts: Collection[str],
-) -> query.Query:
-    """Creates a collection query of type `query_cls` from a list of
-    strings in the format used by parse_query_part. `model_cls`
-    determines how queries are constructed from strings.
-    """
-    subqueries = []
-    for part in query_parts:
-        subqueries.append(QueryTerm.make(part).get_query(model_cls))
-    if not subqueries:  # No terms in query.
-        subqueries = [query.TrueQuery()]
-    return query_cls(subqueries)
-
-
 class SortTerm(NamedTuple):
     """Represents a parsed sort specification with field name and direction."""
 
@@ -201,73 +187,6 @@ class SortTerm(NamedTuple):
         return sort_cls(field, self.ascending)
 
 
-def sort_from_strings(
-    model_cls: type[LibModel], sort_parts: Sequence[str]
-) -> sort.Sort:
-    """Construct a Sort object from a sequence of sort field strings.
-
-    Interpret, validate, and translate user-provided sort field strings into
-    a composite sort order for querying the database. It supports multi-field
-    sorting by combining individual sort terms, and ensures that only valid
-    fields are included in the resulting sort.
-
-    The main purpose is to provide a flexible way to specify sorting criteria
-    (such as from command-line arguments or configuration) and convert them
-    into a form that the query engine can use to order results.
-
-    If no valid sort fields are provided, a default "no sort" object is returned.
-    """
-    if not sort_parts:
-        return sort.NullSort()
-
-    terms = map(SortTerm.make, filter(SortTerm.check_valid, sort_parts))
-    sorts = [p.get_sort(model_cls) for p in terms]
-
-    sort_obj = sort.MultipleSort(sorts) if len(sorts) > 1 else sorts[0]
-    log.debug("Parsed sort: {!r}", sort_obj)
-
-    return sort_obj
-
-
-def parse_sorted_query(
-    model_cls: type[LibModel], parts: Sequence[str]
-) -> tuple[query.Query, sort.Sort]:
-    """Given a list of strings, create the `Query` and `Sort` that they
-    represent.
-    """
-    # Separate query token and sort token.
-    query_parts = []
-    sort_parts = []
-
-    # Split up query in to comma-separated subqueries, each representing
-    # an AndQuery, which need to be joined together in one OrQuery
-    subquery_parts = []
-    for part in [*parts, ","]:
-        if part.endswith(","):
-            # Ensure we can catch "foo, bar" as well as "foo , bar"
-            last_subquery_part = part[:-1]
-            if last_subquery_part:
-                subquery_parts.append(last_subquery_part)
-            # Parse the subquery in to a single AndQuery
-            # TODO: Avoid needlessly wrapping AndQueries containing 1 subquery?
-            query_parts.append(
-                query_from_strings(query.AndQuery, model_cls, subquery_parts)
-            )
-            del subquery_parts[:]
-        else:
-            # Sort parts (1) end in + or -, (2) don't have a field, and
-            # (3) consist of more than just the + or -.
-            if part.endswith(("+", "-")) and ":" not in part and len(part) > 1:
-                sort_parts.append(part)
-            else:
-                subquery_parts.append(part)
-
-    # Avoid needlessly wrapping single statements in an OR
-    q = query.OrQuery(query_parts) if len(query_parts) > 1 else query_parts[0]
-    s = sort_from_strings(model_cls, sort_parts)
-    return q, s
-
-
 class ModelQuery(NamedTuple):
     """Parses a user-provided string into a query and a sort order.
 
@@ -280,8 +199,8 @@ class ModelQuery(NamedTuple):
     field name, e.g., `artist+ album-`.
     """
 
-    query: query.Query
-    sort: sort.Sort
+    query: Query
+    sort: Sort
 
     @classmethod
     def parse(
@@ -309,10 +228,59 @@ class ModelQuery(NamedTuple):
         lex.whitespace_split = True
 
         try:
-            _query, _sort = parse_sorted_query(model_cls, list(lex))
+            parts = list(lex)
         except ValueError as exc:
             raise query.InvalidQueryError(query_str, exc) from exc
 
+        return cls(
+            cls.get_query(parts, model_cls), cls.get_sort(parts, model_cls)
+        )
+
+    @classmethod
+    def get_sort(cls, parts: Iterable[str], model_cls: type[LibModel]) -> Sort:
+        """Build the final `Sort` object from the extracted directives.
+
+        If no sorting directives are found in the query string,
+        ``sort.NullSort`` is returned.
+        """
+        sort_parts = [p for p in parts if SortTerm.check_valid(p)]
+        if not sort_parts:
+            return sort.NullSort()
+
+        sorts = [SortTerm.make(p).get_sort(model_cls) for p in sort_parts]
+
+        sort_obj = sort.MultipleSort(sorts) if len(sorts) > 1 else sorts[0]
+        log.debug("Parsed sort: {!r}", sort_obj)
+        return sort_obj
+
+    @classmethod
+    def get_subquery(
+        cls, parts: Iterable[str], model_cls: type[LibModel]
+    ) -> Query:
+        """Build a query by combining search terms with a logical AND."""
+        queries = [QueryTerm.make(p).get_query(model_cls) for p in parts]
+
+        return reduce(operator.and_, queries)
+
+    @classmethod
+    def get_query(
+        cls, parts: Iterable[str], model_cls: type[LibModel]
+    ) -> Query:
+        """Build the final `Query` object from the search terms.
+
+        Terms are grouped by commas, which act as logical OR operators.
+        Within each group, terms are combined with logical AND.
+        """
+        query_parts = [p for p in parts if not SortTerm.check_valid(p)]
+
+        queries = [
+            cls.get_subquery(g, model_cls)
+            for k, g in groupby(query_parts, lambda p: p == ",")
+            if not k
+        ]
+        if not queries or "," in {query_parts[0], query_parts[-1]}:
+            queries.append(query.TrueQuery())
+
+        _query = reduce(operator.or_, queries)
         log.debug("Parsed query: {!r}", _query)
-        log.debug("Parsed sort: {!r}", _sort)
-        return cls(_query, _sort)
+        return _query

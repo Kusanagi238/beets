@@ -575,7 +575,6 @@ class NonExistingFieldTest(DummyDataTestCase):
         NotQuery parsing.
         """
         query, sort = beets.library.Item.parse_query("-bar+")
-        assert len(query.subqueries) == 1
-        assert isinstance(query.subqueries[0], TrueQuery)
+        assert isinstance(query, TrueQuery)
         assert isinstance(sort, SlowFieldSort)
         assert sort.field == "-bar"

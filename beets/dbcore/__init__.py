@@ -25,11 +25,6 @@ from .query import (
     OrQuery,
     Query,
 )
-from .queryparse import (
-    parse_sorted_query,
-    query_from_strings,
-    sort_from_strings,
-)
 from .types import Type
 
 __all__ = [
@@ -44,7 +39,4 @@ __all__ = [
     "Query",
     "Results",
     "Type",
-    "parse_sorted_query",
-    "query_from_strings",
-    "sort_from_strings",
 ]
