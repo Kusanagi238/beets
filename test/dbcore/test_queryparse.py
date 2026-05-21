@@ -14,6 +14,8 @@
 
 """Tests for dbcore query parsing helpers."""
 
+import os
+
 import pytest
 
 from beets.dbcore import query, sort
@@ -45,7 +47,7 @@ class TestQueryTermParsing:
             ("year:1999", ("year", "1999", query.NumericQuery)),
             ("year:1999..2010", ("year", "1999..2010", query.NumericQuery)),
             ("", (None, "", query.SubstringQuery)),
-            ("/tmp", ("path", "/tmp", query.PathQuery)),
+            (f"{os.sep}tmp", ("path", f"{os.sep}tmp", query.PathQuery)),
         ],
     )
     def test_query_term_parsing(self, query_string, expected):
