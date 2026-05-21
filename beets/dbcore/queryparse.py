@@ -91,7 +91,7 @@ class QueryTerm:
     @classmethod
     def make(cls, part: str) -> QueryTerm:
         """Parse a query string into structured query term components."""
-        if query.PathQuery.is_path_query(part):
+        if ":" not in part and query.PathQuery.is_path_query(part):
             part = f"path:{part}"
 
         if m := cls.prefix_query_regex.match(part):
