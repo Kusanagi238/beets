@@ -538,6 +538,7 @@ class ImportHelper(TestHelper):
         return bytestring_path(self.import_path)
 
     def setUp(self):
+        # FIXME: Remove once this class is not used in unitests based tests anymore
         super().setUp()
         self.import_media = []
         self.lib.path_formats = [
@@ -616,6 +617,25 @@ class ImportHelper(TestHelper):
         return self.setup_importer(singletons=True, **kwargs)
 
 
+class ImportTestCase(ImportHelper, BeetsTestCase):
+    """
+    DEPRECATED: Use pytest + PytestImportHelper instead.
+    """
+
+    pass
+
+
+class PytestImportHelper(ImportHelper, PytestTestHelper):
+    @pytest.fixture(autouse=True)
+    def setup_import(self, setup):
+        self.import_media = []
+        self.lib.path_formats = [
+            ("default", os.path.join("$artist", "$album", "$title")),
+            ("singleton:true", os.path.join("singletons", "$title")),
+            ("comp:true", os.path.join("compilations", "$album", "$title")),
+        ]
+
+
 class AsIsImporterMixin:
     """
     DEPRECATED: Use pytest + PytestAsIsImporterHelper instead.
@@ -631,9 +651,11 @@ class AsIsImporterMixin:
         return importer
 
 
-class PytestAsIsImporterHelper(AsIsImporterMixin, ImportHelper):
+class PytestAsIsImporterHelper(
+    AsIsImporterMixin, ImportHelper, PytestTestHelper
+):
     @pytest.fixture(autouse=True)
-    def setup_importer_mixin(self):
+    def setup_importer_mixin(self, setup):
         # FIXME: Remove once ImportHelper is migrated to pytest
         # this duplicates the setup from the `setUp` function
         # above
@@ -644,10 +666,6 @@ class PytestAsIsImporterHelper(AsIsImporterMixin, ImportHelper):
             ("comp:true", os.path.join("compilations", "$album", "$title")),
         ]
         self.prepare_album_for_import(1)
-
-
-class ImportTestCase(ImportHelper, BeetsTestCase):
-    pass
 
 
 class ImportSessionFixture(ImportSession):
