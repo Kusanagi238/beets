@@ -617,6 +617,10 @@ class ImportHelper(TestHelper):
 
 
 class AsIsImporterMixin:
+    """
+    DEPRECATED: Use pytest + PytestAsIsImporterHelper instead.
+    """
+
     def setUp(self):
         super().setUp()
         self.prepare_album_for_import(1)
@@ -625,6 +629,12 @@ class AsIsImporterMixin:
         importer = self.setup_importer(autotag=False, **kwargs)
         importer.run()
         return importer
+
+
+class PytestAsIsImporterHelper(AsIsImporterMixin, ImportHelper):
+    @pytest.fixture(autouse=True)
+    def setup_importer_mixin(self):
+        self.prepare_album_for_import(1)
 
 
 class ImportTestCase(ImportHelper, BeetsTestCase):
