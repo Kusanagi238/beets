@@ -28,7 +28,7 @@ from functools import cached_property
 from io import StringIO
 from pathlib import Path
 from tarfile import TarFile
-from tempfile import mkstemp
+from tempfile import gettempdir, mkstemp
 from unittest.mock import Mock, patch
 from zipfile import ZipFile
 
@@ -41,7 +41,6 @@ from beets.autotag.hooks import AlbumInfo, AlbumMatch, TrackInfo
 from beets.importer.tasks import albums_in_dir
 from beets.test import _common
 from beets.test.helper import (
-    NEEDS_REFLINK,
     AsIsImporterMixin,
     AutotagImportTestCase,
     AutotagStub,
@@ -49,7 +48,11 @@ from beets.test.helper import (
     ImportTestCase,
     IOMixin,
     PluginMixin,
+    PytestAsIsImporterHelper,
+    PytestImportHelper,
+    PytestTestHelper,
     capture_log,
+    check_reflink_support,
     has_program,
 )
 from beets.util import bytestring_path, displayable_path, syspath
@@ -72,7 +75,7 @@ class PathsMixin:
         return self.lib_path / "Tag Artist" / "Tag Album" / "Tag Track 1.mp3"
 
 
-class NonAutotaggedImportTest(PathsMixin, AsIsImporterMixin, ImportTestCase):
+class TestNonAutotaggedImport(PathsMixin, PytestAsIsImporterHelper):
     db_on_disk = True
 
     def test_album_created_with_track_artist(self):
@@ -126,7 +129,7 @@ class NonAutotaggedImportTest(PathsMixin, AsIsImporterMixin, ImportTestCase):
         album = self.lib.albums()[0]
         assert album.mb_albumartistids == album.items()[0].mb_albumartistids
 
-    @unittest.skipUnless(_common.HAVE_SYMLINK, "need symlinks")
+    @pytest.mark.skipif(not _common.HAVE_SYMLINK, reason="need symlinks")
     def test_import_link_arrives(self):
         self.run_asis_importer(link=True)
 
@@ -134,7 +137,7 @@ class NonAutotaggedImportTest(PathsMixin, AsIsImporterMixin, ImportTestCase):
         assert self.track_lib_path.is_symlink()
         assert self.track_lib_path.resolve() == self.track_import_path.resolve()
 
-    @unittest.skipUnless(_common.HAVE_HARDLINK, "need hardlinks")
+    @pytest.mark.skipif(not _common.HAVE_SYMLINK, reason="need symlinks")
     def test_import_hardlink_arrives(self):
         self.run_asis_importer(hardlink=True)
 
@@ -144,7 +147,9 @@ class NonAutotaggedImportTest(PathsMixin, AsIsImporterMixin, ImportTestCase):
         assert media_stat[stat.ST_INO] == lib_media_stat[stat.ST_INO]
         assert media_stat[stat.ST_DEV] == lib_media_stat[stat.ST_DEV]
 
-    @NEEDS_REFLINK
+    @pytest.mark.skipif(
+        not check_reflink_support(gettempdir()), reason="need reflink"
+    )
     def test_import_reflink_arrives(self):
         # Detecting reflinks is currently tricky due to various fs
         # implementations, we'll just check the file exists.
@@ -170,13 +175,13 @@ def create_archive(session):
     return path
 
 
-class RmTempTest(BeetsTestCase):
+class TestRmTemp(PytestTestHelper):
     """Tests that temporarily extracted archives are properly removed
     after usage.
     """
 
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def setup_rm_temp(self):
         self.want_resume = False
         self.config["incremental"] = False
         self.config["copy"] = False
@@ -236,7 +241,7 @@ class RmTempTest(BeetsTestCase):
             )
 
 
-class ImportZipTest(AsIsImporterMixin, ImportTestCase):
+class TestImportZip(PytestAsIsImporterHelper):
     def test_import_zip(self):
         zip_path = create_archive(self)
         assert len(self.lib.items()) == 0
@@ -247,7 +252,7 @@ class ImportZipTest(AsIsImporterMixin, ImportTestCase):
         assert len(self.lib.albums()) == 1
 
 
-class ImportTarTest(ImportZipTest):
+class TestImportTar(TestImportZip):
     def create_archive(self):
         (handle, path) = mkstemp(dir=syspath(self.temp_dir))
         path = bytestring_path(path)
@@ -260,19 +265,19 @@ class ImportTarTest(ImportZipTest):
         return path
 
 
-@unittest.skipIf(not has_program("unrar"), "unrar program not found")
-class ImportRarTest(ImportZipTest):
+@pytest.mark.skipif(not has_program("unrar"), reason="unrar program not found")
+class TestImportRar(TestImportZip):
     def create_archive(self):
         return os.path.join(_common.RSRC, b"archive.rar")
 
 
-class Import7zTest(ImportZipTest):
+class TestImport7z(TestImportZip):
     def create_archive(self):
         return os.path.join(_common.RSRC, b"archive.7z")
 
 
-@unittest.skip("Implement me!")
-class ImportPasswordRarTest(ImportZipTest):
+@pytest.mark.skip("Implement me!")
+class TestImportPasswordRar(TestImportZip):
     def create_archive(self):
         return os.path.join(_common.RSRC, b"password.rar")
 
@@ -387,16 +392,17 @@ class ImportSingletonTest(AutotagImportTestCase):
 
 
 @pytest.mark.skipif(
-    not has_program("ffprobe", ["-L"]), "need ffprobe for format recognition"
+    not has_program("ffprobe", ["-L"]),
+    reason="need ffprobe for format recognition",
 )
-class ImportFormatTest:
+class TestImportFormat(PytestImportHelper):
     """Test fix_extension during import."""
 
     def test_recognize_format(self):
         resource_src = os.path.join(_common.RSRC, b"no_ext")
         resource_path = os.path.join(self.import_dir, b"no_ext")
         util.copy(resource_src, resource_path)
-        self.setup_importer()
+        self.setup_importer(autotag=False)
         self.importer.paths = [resource_path]
         self.importer.run()
         assert self.lib.items().get().path.endswith(b".mp3")
@@ -407,7 +413,7 @@ class ImportFormatTest:
         util.copy(resource_path, temp_resource_path)
         new_path = os.path.join(self.temp_dir, b"no_ext.mp3")
         util.copy(temp_resource_path, new_path)
-        self.setup_importer()
+        self.setup_importer(autotag=False)
         self.importer.paths = [temp_resource_path]
         with capture_log() as logs:
             self.importer.run()
@@ -416,7 +422,7 @@ class ImportFormatTest:
 
     def test_recognize_format_not_music(self):
         resource_path = os.path.join(_common.RSRC, b"no_ext_not_music")
-        self.setup_importer()
+        self.setup_importer(autotag=False)
         self.importer.paths = [resource_path]
         self.importer.run()
         assert len(self.lib.items()) == 0
@@ -426,7 +432,7 @@ class ImportFormatTest:
         resource_src = os.path.join(_common.RSRC, b"no_ext")
         resource_path = os.path.join(self.temp_dir, b"no_ext")
         util.copy(resource_src, resource_path)
-        self.setup_importer()
+        self.setup_importer(autotag=False)
         self.importer.paths = [resource_path]
         self.importer.run()
         assert not Path(os.path.join(self.temp_dir_path, "no_ext")).exists()
@@ -436,7 +442,7 @@ class ImportFormatTest:
         resource_src = os.path.join(_common.RSRC, b"no_ext")
         resource_path = os.path.join(self.temp_dir, b"no_ext")
         util.copy(resource_src, resource_path)
-        self.setup_importer()
+        self.setup_importer(autotag=False)
         self.importer.paths = [resource_path]
         self.importer.run()
         assert Path(os.path.join(self.temp_dir_path, "no_ext")).exists()
