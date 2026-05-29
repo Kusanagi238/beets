@@ -18,53 +18,65 @@ test_importer module. But here the test importer inherits from
 ``TerminalImportSession``. So we test this class, too.
 """
 
+import pytest
+
 from beets.test.helper import TerminalImportMixin
 from test import test_importer
 
 
-class NonAutotaggedImportTest(
-    TerminalImportMixin, test_importer.TestNonAutotaggedImport
+class _UITestBase:
+    @pytest.fixture(autouse=True)
+    def _io(self, io):
+        pass
+
+
+class TestNonAutotaggedImport(
+    _UITestBase, TerminalImportMixin, test_importer.TestNonAutotaggedImport
 ):
     pass
 
 
-class ImportTest(TerminalImportMixin, test_importer.ImportTest):
+class TestImport(_UITestBase, TerminalImportMixin, test_importer.TestImport):
     pass
 
 
-class ImportSingletonTest(
-    TerminalImportMixin, test_importer.ImportSingletonTest
+class TestImportSingleton(
+    _UITestBase, TerminalImportMixin, test_importer.TestImportSingleton
 ):
     pass
 
 
-class ImportTracksTest(TerminalImportMixin, test_importer.ImportTracksTest):
-    pass
-
-
-class ImportCompilationTest(
-    TerminalImportMixin, test_importer.ImportCompilationTest
+class TestImportTracks(
+    _UITestBase, TerminalImportMixin, test_importer.TestImportTracks
 ):
     pass
 
 
-class ImportExistingTest(TerminalImportMixin, test_importer.ImportExistingTest):
-    pass
-
-
-class ChooseCandidateTest(
-    TerminalImportMixin, test_importer.ChooseCandidateTest
+class TestImportCompilation(
+    _UITestBase, TerminalImportMixin, test_importer.TestImportCompilation
 ):
     pass
 
 
-class GroupAlbumsImportTest(
-    TerminalImportMixin, test_importer.GroupAlbumsImportTest
+class TestImportExisting(
+    _UITestBase, TerminalImportMixin, test_importer.TestImportExisting
 ):
     pass
 
 
-class GlobalGroupAlbumsImportTest(
-    TerminalImportMixin, test_importer.GlobalGroupAlbumsImportTest
+class TestChooseCandidate(
+    _UITestBase, TerminalImportMixin, test_importer.TestChooseCandidate
+):
+    pass
+
+
+class TestGroupAlbumsImport(
+    _UITestBase, TerminalImportMixin, test_importer.TestGroupAlbumsImport
+):
+    pass
+
+
+class TestGlobalGroupAlbumsImport(
+    _UITestBase, TerminalImportMixin, test_importer.TestGlobalGroupAlbumsImport
 ):
     pass
