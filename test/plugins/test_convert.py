@@ -17,7 +17,6 @@ import fnmatch
 import os.path
 import re
 import sys
-import unittest
 from typing import TYPE_CHECKING
 
 import pytest
@@ -27,13 +26,9 @@ from beets import util
 from beets.library import Item
 from beets.test import _common
 from beets.test.helper import (
-    AsIsImporterMixin,
-    ImportHelper,
     IOMixin,
-    PluginMixin,
-    PluginTestCase,
+    PytestAsIsImporterHelper,
     PytestPluginTestHelper,
-    capture_log,
 )
 from beetsplug import convert
 
@@ -309,12 +304,11 @@ class TestConvertCli(PytestConvertHelper, ConvertCommand):
         self.assert_playlist_entry("converted.ogg", "--keep-new")
 
 
-class NeverConvertLossyFilesTest(ConvertTestCase, ConvertCommand):
+class TestNeverConvertLossyFiles(PytestConvertHelper, ConvertCommand):
     """Test the effect of the `never_convert_lossy_files` option."""
 
-    def setUp(self):
-        super().setUp()
-
+    @pytest.fixture(autouse=True)
+    def never_convert_setup(self, setup):
         self.convert_dest = self.temp_dir_path / "convert_dest"
         self.config["convert"] = {
             "dest": str(self.convert_dest),
