@@ -13,16 +13,15 @@
 # included in all copies or substantial portions of the Software.
 
 
-import unittest
 from typing import Any, ClassVar
 
 import pytest
 from mediafile import MediaFile
 
 from beets.test.helper import (
-    AsIsImporterMixin,
-    ImportTestCase,
     PluginMixin,
+    PytestAsIsImporterHelper,
+    PytestImportHelper,
     has_program,
 )
 from beetsplug.replaygain import (
@@ -62,7 +61,7 @@ def reset_replaygain(item):
     item.store()
 
 
-class ReplayGainTestCase(PluginMixin, ImportTestCase):
+class PytestReplayGainHelper(PluginMixin, PytestImportHelper):
     db_on_disk = True
     plugin = "replaygain"
     preload_plugin = False
@@ -73,19 +72,17 @@ class ReplayGainTestCase(PluginMixin, ImportTestCase):
     def backend(self):
         return self.plugin_config["backend"]
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def replaygain_setup(self, setup):
         # Implemented by Mixins, see above. This may decide to skip the test.
         self.test_backend()
-
-        super().setUp()
         self.config["replaygain"].set(self.plugin_config)
-
         self.load_plugins()
 
 
 class ThreadedImportMixin:
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def threaded_setup(self, replaygain_setup):
         self.config["threaded"] = True
 
 
@@ -110,7 +107,7 @@ class GstBackendMixin(BackendMixin):
             GStreamerBackend(self.config["replaygain"], None)
         except FatalGstreamerPluginReplayGainError as e:
             # Skip the test if plugins could not be loaded.
-            self.skipTest(str(e))
+            pytest.skip(str(e))
 
 
 class CmdBackendMixin(BackendMixin):
@@ -155,7 +152,7 @@ class ReplayGainCliTest:
             i.rg_track_peak is None and i.rg_track_gain is None
             for i in self.lib.items()
         ):
-            self.skipTest("decoder plugins could not be loaded.")
+            pytest.skip("decoder plugins could not be loaded.")
 
         for item in self.lib.items():
             assert item.rg_track_peak is not None
@@ -214,7 +211,7 @@ class ReplayGainCliTest:
         if not self.has_r128_support:
             # This test is a lot less interesting if the backend cannot write
             # both tag types.
-            self.skipTest(
+            pytest.skip(
                 f"r128 tags for opus not supported on backend {self.backend}"
             )
 
@@ -271,7 +268,7 @@ class ReplayGainCliTest:
 
     def test_cli_writes_only_r128_tags(self):
         if not self.has_r128_support:
-            self.skipTest(
+            pytest.skip(
                 f"r128 tags for opus not supported on backend {self.backend}"
             )
 
@@ -305,7 +302,7 @@ class ReplayGainCliTest:
 
     def test_r128_targetlevel_has_effect(self):
         if not self.has_r128_support:
-            self.skipTest(
+            pytest.skip(
                 f"r128 tags for opus not supported on backend {self.backend}"
             )
 
@@ -338,9 +335,7 @@ class ReplayGainCliTest:
     def test_clears_wrong_tag_type(self):
         """Check that items that have tags of the wrong type won't be skipped."""
         if not self.has_r128_support:
-            # This test is a lot less interesting if the backend cannot write
-            # both tag types.
-            self.skipTest(
+            pytest.skip(
                 f"r128 tags for opus not supported on backend {self.backend}"
             )
 
@@ -370,35 +365,35 @@ class ReplayGainCliTest:
         assert item_r128.rg_track_peak is None
 
 
-@unittest.skipIf(not GST_AVAILABLE, "gstreamer cannot be found")
-class ReplayGainGstCliTest(
-    ReplayGainCliTest, ReplayGainTestCase, GstBackendMixin
+@pytest.mark.skipif(not GST_AVAILABLE, reason="gstreamer cannot be found")
+class TestReplayGainGstCli(
+    ReplayGainCliTest, PytestReplayGainHelper, GstBackendMixin
 ):
     FNAME = "full"  # file contains only silence
 
 
-@unittest.skipIf(not GAIN_PROG, "no *gain command found")
-class ReplayGainCmdCliTest(
-    ReplayGainCliTest, ReplayGainTestCase, CmdBackendMixin
+@pytest.mark.skipif(not GAIN_PROG, reason="no *gain command found")
+class TestReplayGainCmdCli(
+    ReplayGainCliTest, PytestReplayGainHelper, CmdBackendMixin
 ):
     FNAME = "full"  # file contains only silence
 
 
-@unittest.skipIf(not FFMPEG_AVAILABLE, "ffmpeg cannot be found")
-class ReplayGainFfmpegCliTest(
-    ReplayGainCliTest, ReplayGainTestCase, FfmpegBackendMixin
+@pytest.mark.skipif(not FFMPEG_AVAILABLE, reason="ffmpeg cannot be found")
+class TestReplayGainFfmpegCli(
+    ReplayGainCliTest, PytestReplayGainHelper, FfmpegBackendMixin
 ):
     FNAME = "full"  # file contains only silence
 
 
-@unittest.skipIf(not FFMPEG_AVAILABLE, "ffmpeg cannot be found")
-class ReplayGainFfmpegNoiseCliTest(
-    ReplayGainCliTest, ReplayGainTestCase, FfmpegBackendMixin
+@pytest.mark.skipif(not FFMPEG_AVAILABLE, reason="ffmpeg cannot be found")
+class TestReplayGainFfmpegNoiseCli(
+    ReplayGainCliTest, PytestReplayGainHelper, FfmpegBackendMixin
 ):
     FNAME = "whitenoise"
 
 
-class ImportTest(AsIsImporterMixin):
+class ImportTest(PytestAsIsImporterHelper):
     def test_import_converted(self):
         self.run_asis_importer()
         for item in self.lib.items():
@@ -409,25 +404,29 @@ class ImportTest(AsIsImporterMixin):
             assert item.rg_album_gain is not None
 
 
-@unittest.skipIf(not GST_AVAILABLE, "gstreamer cannot be found")
-class ReplayGainGstImportTest(ImportTest, ReplayGainTestCase, GstBackendMixin):
-    pass
-
-
-@unittest.skipIf(not GAIN_PROG, "no *gain command found")
-class ReplayGainCmdImportTest(ImportTest, ReplayGainTestCase, CmdBackendMixin):
-    pass
-
-
-@unittest.skipIf(not FFMPEG_AVAILABLE, "ffmpeg cannot be found")
-class ReplayGainFfmpegImportTest(
-    ImportTest, ReplayGainTestCase, FfmpegBackendMixin
+@pytest.mark.skipif(not GST_AVAILABLE, reason="gstreamer cannot be found")
+class TestReplayGainGstImport(
+    ImportTest, PytestReplayGainHelper, GstBackendMixin
 ):
     pass
 
 
-@unittest.skipIf(not FFMPEG_AVAILABLE, "ffmpeg cannot be found")
-class ReplayGainFfmpegThreadedImportTest(
-    ThreadedImportMixin, ImportTest, ReplayGainTestCase, FfmpegBackendMixin
+@pytest.mark.skipif(not GAIN_PROG, reason="no *gain command found")
+class TestReplayGainCmdImport(
+    ImportTest, PytestReplayGainHelper, CmdBackendMixin
+):
+    pass
+
+
+@pytest.mark.skipif(not FFMPEG_AVAILABLE, reason="ffmpeg cannot be found")
+class TestReplayGainFfmpegImport(
+    ImportTest, PytestReplayGainHelper, FfmpegBackendMixin
+):
+    pass
+
+
+@pytest.mark.skipif(not FFMPEG_AVAILABLE, reason="ffmpeg cannot be found")
+class TestReplayGainFfmpegThreadedImport(
+    ThreadedImportMixin, ImportTest, PytestReplayGainHelper, FfmpegBackendMixin
 ):
     pass
