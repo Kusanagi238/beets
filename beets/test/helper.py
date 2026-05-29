@@ -634,6 +634,15 @@ class AsIsImporterMixin:
 class PytestAsIsImporterHelper(AsIsImporterMixin, ImportHelper):
     @pytest.fixture(autouse=True)
     def setup_importer_mixin(self):
+        # FIXME: Remove once ImportHelper is migrated to pytest
+        # this duplicates the setup from the `setUp` function
+        # above
+        self.import_media = []
+        self.lib.path_formats = [
+            ("default", os.path.join("$artist", "$album", "$title")),
+            ("singleton:true", os.path.join("singletons", "$title")),
+            ("comp:true", os.path.join("compilations", "$album", "$title")),
+        ]
         self.prepare_album_for_import(1)
 
 
