@@ -2,10 +2,10 @@ import os
 
 from mediafile import MediaFile
 
-from beets.test.helper import AsIsImporterMixin, ImportTestCase, PluginMixin
+from beets.test.helper import PluginMixin, PytestAsIsImporterHelper
 
 
-class ScrubbedImportTest(AsIsImporterMixin, PluginMixin, ImportTestCase):
+class TestScrubbedImport(PluginMixin, PytestAsIsImporterHelper):
     db_on_disk = True
     plugin = "scrub"
 
