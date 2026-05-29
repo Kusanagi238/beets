@@ -4,8 +4,10 @@ import os
 import platform
 from unittest.mock import Mock, patch
 
+import pytest
+
 from beets.test._common import touch
-from beets.test.helper import AsIsImporterMixin, ImportTestCase, PluginMixin
+from beets.test.helper import PluginMixin, PytestAsIsImporterHelper
 from beetsplug.permissions import (
     check_permissions,
     convert_perm,
@@ -13,12 +15,11 @@ from beetsplug.permissions import (
 )
 
 
-class PermissionsPluginTest(AsIsImporterMixin, PluginMixin, ImportTestCase):
+class TestPermissionsPlugin(PluginMixin, PytestAsIsImporterHelper):
     plugin = "permissions"
 
-    def setUp(self):
-        super().setUp()
-
+    @pytest.fixture(autouse=True)
+    def permissions_setup(self, setup):
         self.config["permissions"] = {"file": "777", "dir": "777"}
 
     def test_permissions_on_album_imported(self):
