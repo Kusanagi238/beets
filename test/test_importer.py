@@ -23,7 +23,6 @@ import shutil
 import stat
 import sys
 import unicodedata
-import unittest
 from functools import cached_property
 from io import StringIO
 from pathlib import Path
@@ -41,14 +40,11 @@ from beets.autotag.hooks import AlbumInfo, AlbumMatch, TrackInfo
 from beets.importer.tasks import albums_in_dir
 from beets.test import _common
 from beets.test.helper import (
-    AsIsImporterMixin,
-    AutotagImportTestCase,
     AutotagStub,
-    BeetsTestCase,
-    ImportTestCase,
     IOMixin,
     PluginMixin,
     PytestAsIsImporterHelper,
+    PytestAutotagImportHelper,
     PytestImportHelper,
     PytestTestHelper,
     capture_log,
@@ -282,13 +278,13 @@ class TestImportPasswordRar(TestImportZip):
         return os.path.join(_common.RSRC, b"password.rar")
 
 
-class ImportSingletonTest(AutotagImportTestCase):
+class TestImportSingleton(PytestAutotagImportHelper):
     """Test ``APPLY`` and ``ASIS`` choices for an import session with
     singletons config set to True.
     """
 
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def singleton_setup(self, setup_import):
         self.prepare_album_for_import(1)
         self.importer = self.setup_singleton_importer()
 
@@ -448,11 +444,11 @@ class TestImportFormat(PytestImportHelper):
         assert Path(os.path.join(self.temp_dir_path, "no_ext")).exists()
 
 
-class ImportTest(PathsMixin, AutotagImportTestCase):
+class TestImport(PathsMixin, PytestAutotagImportHelper):
     """Test APPLY, ASIS and SKIP choices."""
 
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def autotag_setup(self, setup_import):
         self.prepare_album_for_import(1)
         self.setup_importer()
 
@@ -622,11 +618,11 @@ class ImportTest(PathsMixin, AutotagImportTestCase):
                 assert item.disc == disc
 
 
-class ImportTracksTest(AutotagImportTestCase):
+class TestImportTracks(PytestAutotagImportHelper):
     """Test TRACKS and APPLY choice."""
 
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def tracks_setup(self, setup_import):
         self.prepare_album_for_import(1)
         self.setup_importer()
 
@@ -648,11 +644,11 @@ class ImportTracksTest(AutotagImportTestCase):
         assert (self.lib_path / "singletons" / "Applied Track 1.mp3").exists()
 
 
-class ImportCompilationTest(AutotagImportTestCase):
+class TestImportCompilation(PytestAutotagImportHelper):
     """Test ASIS import of a folder containing tracks with different artists."""
 
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def compilation_setup(self, setup_import):
         self.prepare_album_for_import(3)
         self.setup_importer()
 
@@ -753,18 +749,16 @@ class ImportCompilationTest(AutotagImportTestCase):
         assert asserted_multi_artists_1
 
 
-class ImportExistingTest(PathsMixin, AutotagImportTestCase):
+class TestImportExisting(PathsMixin, PytestAutotagImportHelper):
     """Test importing files that are already in the library directory."""
 
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def existing_setup(self, setup_import):
         self.prepare_album_for_import(1)
 
         self.reimporter = self.setup_importer(import_dir=self.libdir)
         self.importer = self.setup_importer()
-
-    def tearDown(self):
-        super().tearDown()
+        yield
         self.matcher.restore()
 
     @cached_property
@@ -833,11 +827,11 @@ class ImportExistingTest(PathsMixin, AutotagImportTestCase):
         assert self.lib.items().get().filepath == self.applied_track_path
 
 
-class GroupAlbumsImportTest(AutotagImportTestCase):
+class TestGroupAlbumsImport(PytestAutotagImportHelper):
     matching = AutotagStub.NONE
 
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def group_albums_setup(self, setup_import):
         self.prepare_album_for_import(3)
         self.setup_importer()
 
@@ -893,19 +887,19 @@ class GroupAlbumsImportTest(AutotagImportTestCase):
         assert albums == {"Album B", "Tag Album"}
 
 
-class GlobalGroupAlbumsImportTest(GroupAlbumsImportTest):
-    def setUp(self):
-        super().setUp()
+class TestGlobalGroupAlbumsImport(TestGroupAlbumsImport):
+    @pytest.fixture(autouse=True)
+    def global_group_setup(self, group_albums_setup):
         self.importer.clear_choices()
         self.importer.default_choice = importer.Action.ASIS
         config["import"]["group_albums"] = True
 
 
-class ChooseCandidateTest(AutotagImportTestCase):
+class TestChooseCandidate(PytestAutotagImportHelper):
     matching = AutotagStub.BAD
 
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def candidate_setup(self, setup_import):
         self.prepare_album_for_import(1)
         self.setup_importer()
 
@@ -920,10 +914,9 @@ class ChooseCandidateTest(AutotagImportTestCase):
         assert self.lib.albums().get().album == "Applied Album MM"
 
 
-class InferAlbumDataTest(unittest.TestCase):
-    def setUp(self):
-        super().setUp()
-
+class TestInferAlbumData:
+    @pytest.fixture(autouse=True)
+    def infer_album_setup(self):
         i1 = _common.item()
         i2 = _common.item()
         i3 = _common.item()
@@ -1030,12 +1023,11 @@ def album_candidates_mock(*args, **kwargs):
 @patch(
     "beets.metadata_plugins.candidates", Mock(side_effect=album_candidates_mock)
 )
-class ImportDuplicateAlbumTest(PluginMixin, ImportTestCase):
+class TestImportDuplicateAlbum(PluginMixin, PytestImportHelper):
     plugin = "musicbrainz"
 
-    def setUp(self):
-        super().setUp()
-
+    @pytest.fixture(autouse=True)
+    def duplicate_album_setup(self, setup_import):
         # Original album
         self.add_album_fixture(albumartist="artist", album="album")
 
@@ -1129,7 +1121,7 @@ class ImportDuplicateAlbumTest(PluginMixin, ImportTestCase):
         assert len(self.lib.albums()) == 1
 
     def test_twice_in_import_dir(self):
-        self.skipTest("write me")
+        pytest.skip("write me")
 
     def test_keep_when_extra_key_is_different(self):
         config["import"]["duplicate_keys"]["album"] = "albumartist album flex"
@@ -1161,7 +1153,7 @@ class ImportDuplicateAlbumTest(PluginMixin, ImportTestCase):
 @patch(
     "beets.metadata_plugins.candidates", Mock(side_effect=album_candidates_mock)
 )
-class ImportDuplicateAlbumThreadedTest(PluginMixin, ImportTestCase):
+class TestImportDuplicateAlbumThreaded(PluginMixin, PytestImportHelper):
     """Regression test for #6601: threaded merge must propagate context vars."""
 
     plugin = "musicbrainz"
@@ -1169,8 +1161,8 @@ class ImportDuplicateAlbumThreadedTest(PluginMixin, ImportTestCase):
     # empty DB, so we need a real file that all threads share.
     db_on_disk = True
 
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def threaded_duplicate_setup(self, setup_import):
         self.add_album_fixture(albumartist="artist", album="album")
         self.prepare_album_for_import(1)
         self.importer = self.setup_importer(
@@ -1210,10 +1202,9 @@ def item_candidates_mock(*args, **kwargs):
     "beets.metadata_plugins.item_candidates",
     Mock(side_effect=item_candidates_mock),
 )
-class ImportDuplicateSingletonTest(ImportTestCase):
-    def setUp(self):
-        super().setUp()
-
+class TestImportDuplicateSingleton(PytestImportHelper):
+    @pytest.fixture(autouse=True)
+    def singleton_duplicate_setup(self, setup_import):
         # Original file in library
         self.add_item_fixture(
             artist="artist", title="title", mb_trackid="old trackid"
@@ -1296,7 +1287,7 @@ class ImportDuplicateSingletonTest(ImportTestCase):
         assert self.lib.items().get().mb_trackid == "new trackid"
 
     def test_twice_in_import_dir(self):
-        self.skipTest("write me")
+        pytest.skip("write me")
 
     def add_item_fixture(self, **kwargs):
         # Move this to TestHelper
@@ -1306,7 +1297,7 @@ class ImportDuplicateSingletonTest(ImportTestCase):
         return item
 
 
-class TagLogTest(unittest.TestCase):
+class TestTagLog:
     def test_tag_log_line(self):
         sio = StringIO()
         handler = logging.StreamHandler(sio)
@@ -1322,7 +1313,7 @@ class TagLogTest(unittest.TestCase):
         assert "status caf\xe9" in sio.getvalue()
 
 
-class ResumeImportTest(ImportTestCase):
+class TestResumeImport(PytestImportHelper):
     @patch("beets.plugins.send")
     def test_resume_album(self, plugins_send):
         self.prepare_albums_for_import(2)
@@ -1368,7 +1359,7 @@ class ResumeImportTest(ImportTestCase):
         assert self.lib.items("title:'Track 1'").get() is not None
 
 
-class IncrementalImportTest(AsIsImporterMixin, ImportTestCase):
+class TestIncrementalImport(PytestAsIsImporterHelper):
     def test_incremental_album(self):
         importer = self.run_asis_importer(incremental=True)
 
@@ -1406,10 +1397,9 @@ def _mkmp3(path):
     )
 
 
-class AlbumsInDirTest(BeetsTestCase):
-    def setUp(self):
-        super().setUp()
-
+class TestAlbumsInDir(PytestTestHelper):
+    @pytest.fixture(autouse=True)
+    def albums_in_dir_setup(self, setup):
         # create a directory structure for testing
         self.base = os.path.abspath(os.path.join(self.temp_dir, b"tempdir"))
         os.mkdir(syspath(self.base))
@@ -1448,7 +1438,7 @@ class AlbumsInDirTest(BeetsTestCase):
                 assert len(album) == 1
 
 
-class MultiDiscAlbumsInDirTest(BeetsTestCase):
+class TestMultiDiscAlbumsInDir(PytestTestHelper):
     def create_music(self, files=True, ascii=True):
         """Create some music in multiple album directories.
 
@@ -1567,41 +1557,39 @@ class MultiDiscAlbumsInDirTest(BeetsTestCase):
         assert root == self.dirs[0:3]
         assert len(items) == 3
 
-    def test_coalesce_markers(self):
-        for i, (marker, suffix1, suffix2) in enumerate(
-            [
-                (b"Disc", b" 1", b" 02"),  # titlecase, space-separated
-                (b"disk 757", b" 1", b" 02"),  # lowercase, numerical suffix
-                (b"CD", b"01", b"02"),  # uppercase, no space (e.g. CD01)
-                (b"disc", b"_1", b"_2"),  # underscore separator (e.g. disc_1)
-                (b"cAsSeTtE", b" 1", b" 02"),  # mixed case
-                (b"Digital   Media", b" 1", b" 02"),  # multiple spaces
-                (b"vinyl", b" 1", b" 02"),  # lowercase
-                (b"12 vinyl", b" 1", b" 02"),  # common prefix
-            ]
-        ):
-            with self.subTest(marker=marker, suffix1=suffix1, suffix2=suffix2):
-                base = os.path.abspath(
-                    os.path.join(self.temp_dir, b"marker_" + str(i).encode())
-                )
-                os.mkdir(syspath(base))
+    @pytest.mark.parametrize(
+        "marker,suffix1,suffix2",
+        [
+            ("Disc", " 1", " 02"),  # titlecase, space-separated
+            ("disk 757", " 1", " 02"),  # lowercase, numerical suffix
+            ("CD", "01", "02"),  # uppercase, no space (e.g. CD01)
+            ("disc", "_1", "_2"),  # underscore separator (e.g. disc_1)
+            ("cAsSeTtE", " 1", " 02"),  # mixed case
+            ("Digital   Media", " 1", " 02"),  # multiple spaces
+            ("vinyl", " 1", " 02"),  # lowercase
+            ("12 vinyl", " 1", " 02"),  # common prefix
+        ],
+    )
+    def test_coalesce_markers(self, tmp_path, marker, suffix1, suffix2):
+        base = bytestring_path(tmp_path / "marker")
+        os.mkdir(syspath(base))
 
-                album_dir = os.path.join(base, b"Album Name")
-                os.mkdir(syspath(album_dir))
+        album_dir = os.path.join(base, b"Album Name")
+        os.mkdir(syspath(album_dir))
 
-                discs = []
-                for suffix in (suffix1, suffix2):
-                    disc = os.path.join(album_dir, marker + suffix)
-                    os.mkdir(syspath(disc))
-                    _mkmp3(syspath(os.path.join(disc, b"song.mp3")))
-                    discs.append(disc)
+        discs = []
+        for suffix in (suffix1, suffix2):
+            disc = os.path.join(album_dir, marker.encode() + suffix.encode())
+            os.mkdir(syspath(disc))
+            _mkmp3(syspath(os.path.join(disc, b"song.mp3")))
+            discs.append(disc)
 
-                albums = list(albums_in_dir(base))
-                assert len(albums) == 1
-                root, items = albums[0]
-                for disc in discs:
-                    assert disc in root
-                assert len(items) == 2
+        albums = list(albums_in_dir(base))
+        assert len(albums) == 1
+        root, items = albums[0]
+        for disc in discs:
+            assert disc in root
+        assert len(items) == 2
 
     def test_no_coalesce_mismatched_prefixes(self):
         # "CD 02" and "Enhanced CD 01" share the "cd" marker but have
@@ -1621,7 +1609,7 @@ class MultiDiscAlbumsInDirTest(BeetsTestCase):
         assert len(albums) == 2
 
 
-class ReimportTest(AutotagImportTestCase):
+class TestReimport(PytestAutotagImportHelper):
     """Test "re-imports", in which the autotagging machinery is used for
     music that's already in the library.
 
@@ -1632,9 +1620,8 @@ class ReimportTest(AutotagImportTestCase):
 
     matching = AutotagStub.GOOD
 
-    def setUp(self):
-        super().setUp()
-
+    @pytest.fixture(autouse=True)
+    def reimport_setup(self, setup_import):
         # The existing album.
         album = self.add_album_fixture()
         album.added = 4242.0
@@ -1726,11 +1713,11 @@ class ReimportTest(AutotagImportTestCase):
         assert self._album().data_source == "match_source"
 
 
-class ImportPretendTest(IOMixin, AutotagImportTestCase):
+class TestImportPretend(IOMixin, PytestAutotagImportHelper):
     """Test the pretend commandline option"""
 
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def pretend_setup(self, setup_import):
         self.album_track_path = self.prepare_album_for_import(1)[0]
         self.single_path = self.prepare_track_for_import(2, self.import_path)
         self.album_path = self.album_track_path.parent
@@ -1777,8 +1764,8 @@ def mocked_get_albums_by_ids(ids):
     """
     # Map IDs to (release title, artist), so the distances are different.
     album_artist_map = {
-        ImportIdTest.ID_RELEASE_0: ("VALID_RELEASE_0", "TAG ARTIST"),
-        ImportIdTest.ID_RELEASE_1: ("VALID_RELEASE_1", "DISTANT_MATCH"),
+        TestImportId.ID_RELEASE_0: ("VALID_RELEASE_0", "TAG ARTIST"),
+        TestImportId.ID_RELEASE_1: ("VALID_RELEASE_1", "DISTANT_MATCH"),
     }
 
     for id_ in ids:
@@ -1812,8 +1799,8 @@ def mocked_get_tracks_by_ids(ids):
     """
     # Map IDs to (recording title, artist), so the distances are different.
     title_artist_map = {
-        ImportIdTest.ID_RECORDING_0: ("VALID_RECORDING_0", "TAG ARTIST"),
-        ImportIdTest.ID_RECORDING_1: ("VALID_RECORDING_1", "DISTANT_MATCH"),
+        TestImportId.ID_RECORDING_0: ("VALID_RECORDING_0", "TAG ARTIST"),
+        TestImportId.ID_RECORDING_1: ("VALID_RECORDING_1", "DISTANT_MATCH"),
     }
 
     for id_ in ids:
@@ -1835,14 +1822,14 @@ def mocked_get_tracks_by_ids(ids):
     "beets.metadata_plugins.albums_for_ids",
     Mock(side_effect=mocked_get_albums_by_ids),
 )
-class ImportIdTest(ImportTestCase):
+class TestImportId(PytestImportHelper):
     ID_RELEASE_0 = "00000000-0000-0000-0000-000000000000"
     ID_RELEASE_1 = "11111111-1111-1111-1111-111111111111"
     ID_RECORDING_0 = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
     ID_RECORDING_1 = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
-    def setUp(self):
-        super().setUp()
+    @pytest.fixture(autouse=True)
+    def import_id_setup(self, setup_import):
         self.prepare_album_for_import(1)
 
     def test_one_mbid_one_album(self):
@@ -1902,7 +1889,7 @@ class ImportIdTest(ImportTestCase):
         }
 
 
-class MpeglayerWavImportTest(AsIsImporterMixin, ImportTestCase):
+class TestMpeglayerWavImport(PytestAsIsImporterHelper):
     """Test remuxing of WAVE_FORMAT_MPEGLAYER3 WAV files."""
 
     def test_remux_mpeglayer3_wav(self):

@@ -880,12 +880,26 @@ class AutotagStub:
 
 
 class AutotagImportTestCase(ImportTestCase):
+    """
+    DEPRECATED: Use pytest + PytestAutotagImportHelper instead.
+    """
+
     matching = AutotagStub.IDENT
 
     def setUp(self):
         super().setUp()
         self.matcher = AutotagStub(self.matching).install()
         self.addCleanup(self.matcher.restore)
+
+
+class PytestAutotagImportHelper(PytestImportHelper):
+    matching = AutotagStub.IDENT
+
+    @pytest.fixture(autouse=True)
+    def setup_autotag_import(self, setup):
+        self.matcher = AutotagStub(self.matching).install()
+        yield
+        self.matcher.restore()
 
 
 @dataclass(slots=True)
