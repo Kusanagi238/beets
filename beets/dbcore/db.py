@@ -736,16 +736,13 @@ class Model(ABC, Generic[D]):
             self.store()
 
     # Formatting and templating.
+    _formatter: type[FormattedMapping]
 
-    _formatter = FormattedMapping
-
-    def formatted(
-        self, included_keys: str = _formatter.ALL_KEYS, for_path: bool = False
-    ) -> FormattedMapping:
+    def formatted(self, *args, **kwargs) -> FormattedMapping:
         """Get a mapping containing all values on this object formatted
         as human-readable unicode strings.
         """
-        return self._formatter(self, included_keys, for_path)
+        return self._formatter(self, *args, **kwargs)
 
     def evaluate_template(
         self, template: str | functemplate.Template, for_path: bool = False
