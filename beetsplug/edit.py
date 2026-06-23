@@ -12,8 +12,7 @@
 # The above copyright notice and this permission notice shall be
 # included in all copies or substantial portions of the Software.
 
-"""Open metadata information in a text editor to let the user edit it.
-"""
+"""Open metadata information in a text editor to let the user edit it."""
 
 import codecs
 import os
@@ -23,7 +22,7 @@ from tempfile import NamedTemporaryFile
 
 import yaml
 
-from beets import plugins, ui, util, config
+from beets import config, plugins, ui, util
 from beets.dbcore import types
 from beets.importer import action
 from beets.ui.commands import PromptChoice, _do_query
@@ -47,9 +46,7 @@ def edit(filename, log):
     try:
         subprocess.call(cmd)
     except OSError as exc:
-        raise ui.UserError(
-            "could not run editor command {!r}: {}".format(cmd[0], exc)
-        )
+        raise ui.UserError("could not run editor command {!r}: {}".format(cmd[0], exc))
 
 
 def dump(arg):
@@ -72,9 +69,7 @@ def load(s):
         for d in yaml.safe_load_all(s):
             if not isinstance(d, dict):
                 raise ParseError(
-                    "each entry must be a dictionary; found {}".format(
-                        type(d).__name__
-                    )
+                    "each entry must be a dictionary; found {}".format(type(d).__name__)
                 )
 
             # Convert all keys to strings. They started out as strings,
@@ -246,7 +241,7 @@ class EditPlugin(plugins.BeetsPlugin):
                 old_str += f"# - {key}\n"
             for obj in old_data:
                 # those values will be enforced later anyway
-                obj.update({k:v.get() for k,v in set_fields.items()})
+                obj.update({k: v.get() for k, v in set_fields.items()})
         else:
             old_str = ""
 
@@ -296,9 +291,7 @@ class EditPlugin(plugins.BeetsPlugin):
                     return False
 
                 # Confirm the changes.
-                choice = ui.input_options(
-                    ("continue Editing", "apply", "cancel")
-                )
+                choice = ui.input_options(("continue Editing", "apply", "cancel"))
                 if choice == "a":  # Apply.
                     return True
                 elif choice == "c":  # Cancel.
@@ -306,9 +299,7 @@ class EditPlugin(plugins.BeetsPlugin):
                 elif choice == "e":  # Keep editing.
                     # Reset the temporary changes to the objects. I we have a
                     # copy from above, use that, else reload from the database.
-                    objs = [
-                        (old_obj or obj) for old_obj, obj in zip(objs_old, objs)
-                    ]
+                    objs = [(old_obj or obj) for old_obj, obj in zip(objs_old, objs)]
                     for obj in objs:
                         if not obj.id < 0:
                             obj.load()
@@ -366,9 +357,7 @@ class EditPlugin(plugins.BeetsPlugin):
         choices = [PromptChoice("d", "eDit", self.importer_edit)]
         if task.candidates:
             choices.append(
-                PromptChoice(
-                    "c", "edit Candidates", self.importer_edit_candidate
-                )
+                PromptChoice("c", "edit Candidates", self.importer_edit_candidate)
             )
 
         return choices
